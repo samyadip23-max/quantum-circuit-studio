@@ -1,1 +1,421 @@
 
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Quantum Circuit Studio</title>
+<style>
+:root {
+  --bg:#0b1020;--panel:#131b2e;--panel2:#1a2540;
+  --line:#293651;--text:#e8eefc;--muted:#91a0bd;
+  --accent:#8b7cff;--cyan:#42d9d0;--green:#50d890;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);
+font-family:Inter,system-ui,Arial,sans-serif}
+header{padding:20px 24px;border-bottom:1px solid var(--line);
+display:flex;justify-content:space-between;align-items:center;gap:12px}
+h1{font-size:22px;margin:0}
+.sub{color:var(--muted);font-size:12px;margin-top:5px}
+main{max-width:1400px;margin:auto;padding:20px}
+.layout{display:grid;grid-template-columns:230px 1fr;gap:18px}
+.panel{background:var(--panel);border:1px solid var(--line);
+border-radius:13px;padding:16px;margin-bottom:16px}
+h2{font-size:14px;margin:0 0 14px}
+h3{font-size:12px;color:var(--muted);margin:16px 0 9px}
+button,select,input{font:inherit}
+button{background:var(--panel2);border:1px solid var(--line);
+color:var(--text);border-radius:8px;padding:9px 12px;cursor:pointer}
+button:hover{border-color:var(--accent)}
+button.active{background:#30295d;border-color:var(--accent);color:#fff}
+button.primary{background:var(--accent);border-color:var(--accent);color:white}
+button.danger{color:#ff9292}
+.gates{display:grid;grid-template-columns:repeat(3,1fr);gap:7px}
+.gate{padding:12px 5px;font-weight:700;font-size:14px}
+.gate small{display:block;font-size:9px;color:var(--muted);font-weight:400;margin-top:4px}
+.controls{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+input,select{background:var(--bg);color:var(--text);
+border:1px solid var(--line);border-radius:7px;padding:9px;width:100%}
+label{font-size:11px;color:var(--muted);display:block;margin-bottom:6px}
+.field{margin-top:12px}
+.workspace{min-width:0}
+.circuit-scroll{overflow-x:auto;padding-bottom:10px}
+#circuit{min-width:max-content}
+.grid-head,.wire-row{display:flex;align-items:center;min-height:58px}
+.grid-head{height:34px}
+.q-label{width:62px;flex-shrink:0;color:var(--cyan);font-family:monospace}
+.column-label{width:66px;text-align:center;color:var(--muted);font-size:11px}
+.cell{width:66px;height:58px;display:flex;align-items:center;
+justify-content:center;position:relative;border-left:1px solid #26334d;cursor:pointer}
+.cell:last-child{border-right:1px solid #26334d}
+.wire{position:absolute;left:0;right:0;top:50%;height:2px;
+background:#53627f;z-index:0}
+.gate-box{position:relative;z-index:2;width:36px;height:34px;
+display:grid;place-items:center;border-radius:7px;
+background:#342c65;border:1px solid #8779ff;
+font-size:12px;font-weight:800;box-shadow:0 2px 9px #0005}
+.gate-box.two{background:#124e55;border-color:var(--cyan)}
+.gate-box button{position:absolute;right:-7px;top:-9px;
+width:16px;height:16px;padding:0;border-radius:50%;
+font-size:10px;background:#9d344b;border:0}
+.empty{width:100%;height:100%;z-index:1}
+.empty:hover{background:#ffffff0a}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.stat{background:var(--panel2);padding:13px;border-radius:9px}
+.stat b{font-size:20px;display:block;margin-top:5px}
+.stat span{color:var(--muted);font-size:11px}
+.prob-row{display:grid;grid-template-columns:48px 1fr 55px;
+gap:10px;align-items:center;margin:11px 0;font-family:monospace;font-size:12px}
+.bar{height:9px;background:#27334d;border-radius:8px;overflow:hidden}
+.bar div{height:100%;background:var(--cyan);border-radius:8px}
+#state{font-family:monospace;font-size:12px;line-height:1.9;
+overflow-wrap:anywhere;color:#c7d3ef}
+.note{font-size:11px;color:var(--muted);line-height:1.6}
+#message{color:var(--green);font-size:12px;min-height:18px;margin-top:9px}
+footer{text-align:center;color:var(--muted);font-size:11px;padding:25px}
+@media(max-width:760px){
+ .layout{grid-template-columns:1fr}
+ header{padding:16px}
+ main{padding:12px}
+ .stats{grid-template-columns:1fr 1fr}
+}
+</style>
+</head>
+<body>
+<header>
+ <div>
+  <h1>⚛ Quantum Circuit Studio</h1>
+  <div class="sub">Visual quantum circuit designer & simulator</div>
+ </div>
+ <div class="controls">
+  <button onclick="loadBell()">Bell State</button>
+  <button onclick="resetCircuit()">Reset</button>
+ </div>
+</header>
+
+<main>
+<div class="layout">
+ <aside>
+  <section class="panel">
+   <h2>Gate library</h2>
+   <h3>Single-qubit gates</h3>
+   <div class="gates" id="gateLibrary"></div>
+   <h3>Rotation gates</h3>
+   <div class="gates" id="rotationLibrary"></div>
+   <h3>Two-qubit gates</h3>
+   <div class="gates" id="twoLibrary"></div>
+   <div class="field">
+    <label>Rotation angle (degrees)</label>
+    <input id="angle" type="number" value="90" step="15">
+   </div>
+   <p class="note">Select a gate, then click an empty circuit cell to place it. For two-qubit gates, the next qubit is automatically selected as the partner.</p>
+  </section>
+
+  <section class="panel">
+   <h2>Circuit settings</h2>
+   <div class="field">
+    <label>Number of qubits</label>
+    <div class="controls">
+     <button onclick="changeQubits(-1)">−</button>
+     <b id="qubitCount">2</b>
+     <button onclick="changeQubits(1)">+</button>
+    </div>
+   </div>
+   <div class="field">
+    <label>Number of columns</label>
+    <div class="controls">
+     <button onclick="changeColumns(-1)">−</button>
+     <b id="columnCount">5</b>
+     <button onclick="changeColumns(1)">+</button>
+    </div>
+   </div>
+   <div class="field">
+    <button class="primary" style="width:100%" onclick="simulate()">▶ Run simulation</button>
+   </div>
+   <div id="message"></div>
+  </section>
+ </aside>
+
+ <div class="workspace">
+  <section class="panel">
+   <div class="controls" style="justify-content:space-between;margin-bottom:16px">
+    <h2 style="margin:0">Circuit editor</h2>
+    <div class="controls">
+     <button onclick="undo()">Undo</button>
+     <button class="danger" onclick="clearCircuit()">Clear</button>
+    </div>
+   </div>
+   <div class="circuit-scroll">
+    <div id="circuit"></div>
+   </div>
+   <p class="note">Click a placed gate's × button to remove it. Circuit operations are applied from left to right.</p>
+  </section>
+
+  <section class="panel">
+   <h2>Simulation results</h2>
+   <div class="stats">
+    <div class="stat"><span>Qubits</span><b id="sQubits">2</b></div>
+    <div class="stat"><span>Gates</span><b id="sGates">0</b></div>
+    <div class="stat"><span>Basis states</span><b id="sStates">4</b></div>
+   </div>
+   <h3>Measurement probabilities</h3>
+   <div id="probabilities" class="note">Run the simulation to see results.</div>
+   <h3>Quantum state vector</h3>
+   <div id="state">|ψ⟩ = |00⟩</div>
+   <div class="field">
+    <button onclick="measure()" class="primary">Measure state</button>
+    <div id="measurement" class="note" style="margin-top:9px"></div>
+   </div>
+  </section>
+ </div>
+</div>
+</main>
+<footer>Quantum Circuit Studio · Educational quantum computing simulator</footer>
+
+<script>
+const single=["H","X","Y","Z","S","T"];
+const rotation=["Rx","Ry","Rz"];
+const two=["CNOT","CZ","SWAP"];
+
+let nq=2,nc=5,selected="H";
+let gates=[];
+let history=[];
+let probabilities=[];
+let state=[];
+
+function saveHistory(){
+ history.push(JSON.stringify({nq,nc,gates}));
+ if(history.length>30)history.shift();
+}
+
+function gateButton(g){
+ return `<button class="gate ${selected===g?"active":""}" onclick="selectGate('${g}')">${g}<small>${gateDescription(g)}</small></button>`;
+}
+function gateDescription(g){
+ return ({H:"Hadamard",X:"Pauli-X",Y:"Pauli-Y",Z:"Pauli-Z",
+ S:"Phase",T:"π/8 phase",Rx:"X rotation",Ry:"Y rotation",
+ Rz:"Z rotation",CNOT:"Controlled X",CZ:"Controlled Z",
+ SWAP:"Swap qubits"})[g]||"";
+}
+function renderLibraries(){
+ document.getElementById("gateLibrary").innerHTML=single.map(gateButton).join("");
+ document.getElementById("rotationLibrary").innerHTML=rotation.map(gateButton).join("");
+ document.getElementById("twoLibrary").innerHTML=two.map(gateButton).join("");
+}
+function selectGate(g){
+ selected=g;
+ renderLibraries();
+}
+function render(){
+ document.getElementById("qubitCount").textContent=nq;
+ document.getElementById("columnCount").textContent=nc;
+ document.getElementById("sQubits").textContent=nq;
+ document.getElementById("sGates").textContent=gates.length;
+ document.getElementById("sStates").textContent=2**nq;
+
+ let html=`<div class="grid-head"><div class="q-label">Qubit</div>`;
+ for(let c=0;c<nc;c++)html+=`<div class="column-label">${c+1}</div>`;
+ html+="</div>";
+
+ for(let q=0;q<nq;q++){
+  html+=`<div class="wire-row"><div class="q-label">q${q}</div>`;
+  for(let c=0;c<nc;c++){
+   const g=gates.find(x=>x.q===q&&x.c===c);
+   let content="";
+   if(g){
+    let cls=two.includes(g.type)?"two":"";
+    let angle=rotation.includes(g.type)?`<small style="font-size:8px">${g.angle}°</small>`:"";
+    content=`<div class="gate-box ${cls}" title="${g.type}">
+      ${g.type}${angle}
+      <button onclick="event.stopPropagation();removeGate(${g.id})">×</button>
+     </div>`;
+   }else{
+    const covered=gates.some(x=>two.includes(x.type)&&x.q===q-1&&x.c===c);
+    content=covered?"":`<div class="empty"></div>`;
+   }
+   html+=`<div class="cell" onclick="placeGate(${q},${c})">
+    <div class="wire"></div>${content}</div>`;
+  }
+  html+="</div>";
+ }
+ document.getElementById("circuit").innerHTML=html;
+}
+
+function placeGate(q,c){
+ if(gates.some(x=>x.q===q&&x.c===c)){
+  message("This cell is occupied.");
+  return;
+ }
+ if(two.includes(selected)){
+  if(q+1>=nq){message("Two-qubit gate needs another qubit below.");return;}
+  if(gates.some(x=>x.c===c&&(x.q===q||x.q===q+1||
+    (two.includes(x.type)&&(x.q===q-1||x.q===q+1))))){
+    message("Qubit already occupied in this column.");return;
+  }
+ }else if(gates.some(x=>two.includes(x.type)&&x.c===c&&(x.q===q||x.q+1===q))){
+  message("Qubit already occupied in this column.");return;
+ }
+ saveHistory();
+ gates.push({
+  id:Date.now()+Math.random(),
+  type:selected,q,c,
+  angle:Number(document.getElementById("angle").value)||90
+ });
+ render();
+ simulate();
+ message(selected+" gate added.");
+}
+function removeGate(id){
+ saveHistory();
+ gates=gates.filter(g=>g.id!==id);
+ render();simulate();
+}
+function undo(){
+ if(!history.length){message("Nothing to undo.");return;}
+ let old=JSON.parse(history.pop());
+ nq=old.nq;nc=old.nc;gates=old.gates;
+ render();simulate();
+ message("Undo successful.");
+}
+function changeQubits(d){
+ if(nq+d<1||nq+d>8)return;
+ saveHistory();
+ nq+=d;
+ gates=gates.filter(g=>g.q<nq&&(!two.includes(g.type)||g.q+1<nq));
+ render();simulate();
+}
+function changeColumns(d){
+ if(nc+d<1||nc+d>20)return;
+ saveHistory();nc+=d;
+ gates=gates.filter(g=>g.c<nc);
+ render();simulate();
+}
+function clearCircuit(){
+ saveHistory();gates=[];
+ render();simulate();message("Circuit cleared.");
+}
+function resetCircuit(){
+ saveHistory();nq=2;nc=5;gates=[];
+ render();simulate();message("Circuit reset.");
+}
+function message(t){
+ document.getElementById("message").textContent=t;
+}
+
+function C(re=0,im=0){return {re,im};}
+function add(a,b){return C(a.re+b.re,a.im+b.im);}
+function mul(a,b){return C(a.re*b.re-a.im*b.im,a.re*b.im+a.im*b.re);}
+function scale(a,s){return C(a.re*s,a.im*s);}
+function abs2(a){return a.re*a.re+a.im*a.im;}
+
+function applySingle(vec,q,m){
+ const n=nq,bit=1<<(n-1-q);
+ let out=vec.map(x=>C(x.re,x.im));
+ for(let i=0;i<vec.length;i++){
+  if(i&bit)continue;
+  let j=i|bit;
+  let a=vec[i],b=vec[j];
+  out[i]=add(mul(m[0][0],a),mul(m[0][1],b));
+  out[j]=add(mul(m[1][0],a),mul(m[1][1],b));
+ }
+ return out;
+}
+function matrix(type,angle){
+ const r=angle*Math.PI/180;
+ const co=Math.cos(r/2),si=Math.sin(r/2);
+ const I=C(0,1);
+ if(type==="H"){
+  let v=1/Math.sqrt(2);
+  return [[C(v),C(v)],[C(v),C(-v)]];
+ }
+ if(type==="X")return [[C(),C(1)],[C(1),C()]];
+ if(type==="Y")return [[C(),C(0,-1)],[C(0,1),C()]];
+ if(type==="Z")return [[C(1),C()],[C(),C(-1)]];
+ if(type==="S")return [[C(1),C()],[C(),I]];
+ if(type==="T")return [[C(1),C()],[C(),C(Math.SQRT1_2,Math.SQRT1_2)]];
+ if(type==="Rx")return [[C(co),C(0,-si)],[C(0,-si),C(co)]];
+ if(type==="Ry")return [[C(co),C(-si)],[C(si),C(co)]];
+ if(type==="Rz")return [[C(co,-si),C()],[C(),C(co,si)]];
+}
+function applyTwo(vec,g){
+ const b1=1<<(nq-1-g.q),b2=1<<(nq-2-g.q);
+ let out=vec.map(x=>C(x.re,x.im));
+ if(g.type==="CNOT"){
+  for(let i=0;i<vec.length;i++){
+   if(i&b1){let j=i^b2;
+    if(i<j){out[i]=vec[j];out[j]=vec[i];}
+   }
+  }
+ }
+ if(g.type==="CZ"){
+  for(let i=0;i<vec.length;i++)if((i&b1)&&(i&b2))out[i]=scale(vec[i],-1);
+ }
+ if(g.type==="SWAP"){
+  for(let i=0;i<vec.length;i++){
+   let bit1=!!(i&b1),bit2=!!(i&b2);
+   if(bit1!==bit2){
+    let j=i^b1^b2;
+    if(i<j){out[i]=vec[j];out[j]=vec[i];}
+   }
+  }
+ }
+ return out;
+}
+function simulate(){
+ let vec=Array(2**nq).fill(null).map(()=>C());
+ vec[0]=C(1);
+ for(let c=0;c<nc;c++){
+  const col=gates.filter(g=>g.c===c).sort((a,b)=>a.q-b.q);
+  for(const g of col){
+   if(two.includes(g.type))vec=applyTwo(vec,g);
+   else vec=applySingle(vec,g.q,matrix(g.type,g.angle));
+  }
+ }
+ state=vec;
+ probabilities=vec.map(abs2);
+ renderResults();
+}
+function renderResults(){
+ const bits=state.length.toString(2).length;
+ let total=probabilities.reduce((a,b)=>a+b,0)||1;
+ document.getElementById("probabilities").innerHTML=probabilities.map((p,i)=>{
+  let v=p/total;
+  let label=i.toString(2).padStart(nq,"0");
+  return `<div class="prob-row"><span>|${label}⟩</span>
+  <div class="bar"><div style="width:${v*100}%"></div></div>
+  <span>${(v*100).toFixed(1)}%</span></div>`;
+ }).join("");
+ document.getElementById("state").innerHTML=
+  " |ψ⟩ = "+state.map((a,i)=>{
+   let mag=Math.sqrt(abs2(a));
+   if(mag<1e-8)return "";
+   let re=a.re.toFixed(3),im=a.im.toFixed(3);
+   return `(${re}${a.im>=0?"+":""}${im}i)|${i.toString(2).padStart(nq,"0")}⟩`;
+  }).filter(Boolean).join(" + ");
+}
+function measure(){
+ let r=Math.random(),sum=0,result=0;
+ for(let i=0;i<probabilities.length;i++){
+  sum+=probabilities[i];
+  if(r<=sum){result=i;break;}
+ }
+ document.getElementById("measurement").innerHTML=
+  `Measured outcome: <b style="color:var(--cyan)">|${result.toString(2).padStart(nq,"0")}⟩</b>`;
+}
+function loadBell(){
+ saveHistory();nq=2;nc=3;
+ gates=[
+  {id:1,type:"H",q:0,c:0,angle:90},
+  {id:2,type:"CNOT",q:0,c:1,angle:90}
+ ];
+ render();simulate();message("Bell state circuit loaded.");
+}
+
+renderLibraries();
+render();
+simulate();
+</script>
+</body>
+</html>
+
