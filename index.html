@@ -25,8 +25,10 @@ label{display:block;color:var(--muted);font-size:11px;margin-bottom:5px}.field{m
 .cell{height:62px;position:relative;display:flex;align-items:center;justify-content:center;border-left:1px solid #273650;cursor:pointer}
 .cell:last-child{border-right:1px solid #273650}.wire{position:absolute;left:0;right:0;top:50%;height:2px;background:#52627f;z-index:0}
 .cell:hover{background:#ffffff08}.cell.pending{background:#352d6744;outline:1px dashed var(--purple);outline-offset:-4px}
-.gatebox{position:relative;z-index:2;min-width:35px;height:34px;padding:0 5px;display:flex;align-items:center;justify-content:center;border-radius:7px;background:#352d67;border:1px solid #9888ff;font-size:12px;font-weight:800;box-shadow:0 2px 8px #0006}
-.gatebox.target{background:#124c53;border-color:var(--cyan)}.gatebox button{position:absolute;right:-7px;top:-9px;width:17px;height:17px;padding:0;border:0;border-radius:50%;background:#a33b52;color:white;font-size:11px;line-height:17px}
+.gatebox{position:relative;z-index:2;min-width:35px;height:34px;padding:0 7px;display:flex;align-items:center;justify-content:center;border-radius:7px;background:#352d67;border:1px solid #9888ff;font-size:12px;font-weight:800;box-shadow:0 2px 8px #0006}
+.gatebox.target{background:#124c53;border-color:var(--cyan)}
+.remove-gate{position:absolute;right:-8px;top:-9px;z-index:8;width:19px;height:19px;min-width:19px;padding:0;border:1px solid #ff9aa8;border-radius:50%;background:#a33b52;color:white;font-size:14px;font-weight:800;line-height:16px;display:flex;align-items:center;justify-content:center}
+.remove-gate:hover{background:#d34e68;border-color:white}
 .connector{position:absolute;left:50%;width:2px;background:var(--cyan);z-index:1;transform:translateX(-50%)}
 .dot{position:absolute;z-index:3;width:11px;height:11px;border-radius:50%;background:var(--cyan);left:50%;top:50%;transform:translate(-50%,-50%);box-shadow:0 0 0 3px #141d31}
 .pair-label{position:absolute;z-index:4;top:2px;left:50%;transform:translateX(-50%);font-size:8px;color:var(--cyan);white-space:nowrap}
@@ -52,7 +54,7 @@ footer{text-align:center;color:var(--muted);font-size:11px;padding:20px}
   <h3>Rotation gates</h3><div class="gates" id="rotationGates"></div>
   <h3>Two-qubit gates</h3><div class="gates" id="twoGates"></div>
   <div class="field"><label for="angle">Rotation angle (degrees)</label><input id="angle" type="number" value="90" step="15"></div>
-  <p class="hint">Select a gate, then tap a circuit cell. For a two-qubit gate, tap the control qubit first and the target qubit second in the same column. The control and target can be any two different wires.</p>
+  <p class="hint">Select a gate, then tap circuit cells in the same column. For CRy, tap the target wire first and the control wire second. For other two-qubit gates, tap the control wire first and the target wire second. Tap the red × on a gate to remove it.</p>
   <div class="status" id="status" aria-live="polite"></div>
  </section>
  <section class="panel">
@@ -68,7 +70,7 @@ footer{text-align:center;color:var(--muted);font-size:11px;padding:20px}
  <section class="panel">
   <div class="toolbar"><h2 style="margin:0">Circuit editor</h2><div class="actions"><button onclick="undo()">Undo</button><button class="danger" onclick="clearCircuit()">Clear</button></div></div>
   <div class="scroll"><div id="circuit"></div></div>
-  <p class="hint">Tap × on a gate to remove it. A pending two-qubit gate can be cancelled by selecting another gate or tapping the selected control again.</p>
+  <p class="hint">Each gate has its own red × button. Removing either endpoint of a two-qubit gate removes that complete connected gate.</p>
  </section>
  <section class="panel">
   <h2>Simulation results</h2>
@@ -92,18 +94,26 @@ function gateBtn(g){return `<button class="gate ${selected===g?"selected":""}" o
 function libraries(){$("singleGates").innerHTML=SINGLE.map(gateBtn).join("");$("rotationGates").innerHTML=ROT.map(gateBtn).join("");$("twoGates").innerHTML=TWO.map(gateBtn).join("")}
 function choose(g){selected=g;pending=null;libraries();render();say(g+" selected.")}
 function snapshot(){history.push(JSON.stringify({nq,nc,gates}));if(history.length>50)history.shift()}
-function key(q,c){return gates.some(g=>g.c===c&&(g.q===q||(isTwo(g.type)&&g.target===q)||(g.type==="SWAP"&&g.target===q)))}
+function key(q,c){return gates.some(g=>g.c===c&&(g.q===q||(isTwo(g.type)&&g.target===q)))}
 function place(q,c){
  if(isTwo(selected)){
-  if(!pending){if(key(q,c)){say("That wire position is occupied.",true);return}pending={q,c};render();say("Control selected on q"+q+". Now tap a different target wire in column "+(c+1)+".");return}
-  if(c!==pending.c){say("Choose the target in the same column.",true);return}
+  const targetFirst=selected==="CRy";
+  if(!pending){
+   if(key(q,c)){say("That wire position is occupied.",true);return}
+   pending={q,c,role:targetFirst?"target":"control"};render();
+   say((targetFirst?"Target":"Control")+" selected on q"+q+". Now tap the "+(targetFirst?"control":"target")+" wire in column "+(c+1)+".");return;
+  }
+  if(c!==pending.c){say("Choose the second wire in the same column.",true);return}
   if(q===pending.q){pending=null;render();say("Connection cancelled.");return}
-  if(key(q,c)){say("Target wire position is occupied.",true);return}
-  snapshot();gates.push({id:crypto.randomUUID?crypto.randomUUID():String(Date.now()+Math.random()),type:selected,q:pending.q,target:q,c,angle:Number($("angle").value)||90});pending=null;render();simulate();say(selected+" connected q"+gates[gates.length-1].q+" → q"+q+".");return;
+  if(key(q,c)){say("The second wire position is occupied.",true);return}
+  const control=targetFirst?q:pending.q;
+  const target=targetFirst?pending.q:q;
+  snapshot();gates.push({id:crypto.randomUUID?crypto.randomUUID():String(Date.now()+Math.random()),type:selected,q:control,target,c,angle:Number($("angle").value)||90});pending=null;render();simulate();say(selected+" connected: control q"+control+" → target q"+target+".");return;
  }
  if(key(q,c)){say("That wire position is occupied.",true);return}
  snapshot();gates.push({id:String(Date.now()+Math.random()),type:selected,q,c,angle:Number($("angle").value)||90});render();simulate();say(selected+" added to q"+q+".");
 }
+function removeButton(id){return `<button class="remove-gate" title="Remove this gate" aria-label="Remove this gate" onclick="event.stopPropagation();removeGate('${id}')">×</button>`}
 function render(){
  $("nqLabel").textContent=nq;$("ncLabel").textContent=nc;
  let opts="";for(let i=0;i<2**nq;i++){let s=i.toString(2).padStart(nq,"0");opts+=`<option value="${s}">|${s}⟩</option>`}
@@ -116,20 +126,24 @@ function render(){
    const p=pending&&pending.c===c&&pending.q===q;
    let content="";
    if(own){
-    if(own.q===q){
-     const bottom=Math.max(own.q,own.target),top=Math.min(own.q,own.target);
-     const center=((bottom-top)*62);
-     const label=own.type==="CNOT"?"⊕":own.type==="CZ"?"Z":own.type==="SWAP"?"×":own.type;
-     content=`<div class="connector" style="height:${center}px;top:50%;transform:translate(-50%,-${own.q<own.target?0:100}%);"></div><span class="dot"></span><span class="pair-label">${own.type}</span>`;
-     if(own.type==="SWAP")content+=`<div class="gatebox target">×</div>`;
-     content+=`<button class="gatebox" style="position:absolute;width:22px;min-width:22px;height:22px;padding:0;border-radius:50%;font-size:11px;${own.type==="SWAP"?"display:none":""}" onclick="event.stopPropagation();removeGate('${own.id}')">•</button>`;
+    if(!isTwo(own.type)){
+     content=`<div class="gatebox">${own.type}${removeButton(own.id)}</div>`;
+    }else if(own.q===q){
+     const distance=Math.abs(own.target-own.q)*62;
+     const controlAbove=own.q<own.target;
+     content=`<div class="connector" style="height:${distance}px;top:50%;transform:translate(-50%,-${controlAbove?0:100}%);"></div><span class="dot"></span><span class="pair-label">${own.type}</span>${removeButton(own.id)}`;
     }else{
      const label=own.type==="CNOT"?"⊕":own.type==="CZ"?"Z":own.type==="SWAP"?"×":own.type;
-     content=`<div class="gatebox target">${label}</div>`;
+     content=`<div class="gatebox target">${label}${removeButton(own.id)}</div>`;
      if(own.type==="SWAP")content+=`<span class="dot"></span>`;
     }
-   }else if(p){content=`<div class="dot"></div><span class="pair-label">CONTROL</span>`}
-   else if(pending&&pending.c===c&&q!==pending.q){content=`<span class="empty">target</span>`}
+   }else if(p){
+    content=pending.role==="target"
+      ?`<div class="gatebox target">${selected}</div><span class="pair-label">TARGET</span>`
+      :`<span class="dot"></span><span class="pair-label">CONTROL</span>`;
+   }else if(pending&&pending.c===c&&q!==pending.q){
+    content=`<span class="empty">${pending.role==="target"?"control":"target"}</span>`;
+   }
    out+=`<div class="cell ${p?"pending":""}" onclick="place(${q},${c})"><div class="wire"></div>${content}</div>`;
   }
   out+="</div>";
